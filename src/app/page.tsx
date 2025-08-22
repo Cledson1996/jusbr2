@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import ProcessoService, { ProcessoData } from "./services/processoService";
 import { ExcelUtils } from "./utils/excelUtils";
 import * as XLSX from "xlsx";
+import Modal from "./components/Modal";
+import ActionMenu from "./components/ActionMenu";
 
 export default function Home() {
   const [numeroProcesso, setNumeroProcesso] = useState("0001234-12.2023.8.26.0100");
@@ -13,6 +15,20 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [showMessage, setShowMessage] = useState(false);
+
+  // Estados dos modais
+  const [modalDetalhes, setModalDetalhes] = useState<{
+    isOpen: boolean;
+    processo: ProcessoData | null;
+  }>({ isOpen: false, processo: null });
+  const [modalDocumentos, setModalDocumentos] = useState<{
+    isOpen: boolean;
+    processo: ProcessoData | null;
+  }>({ isOpen: false, processo: null });
+  const [modalMovimentos, setModalMovimentos] = useState<{
+    isOpen: boolean;
+    processo: ProcessoData | null;
+  }>({ isOpen: false, processo: null });
 
   const processoService = ProcessoService.getInstance();
 
@@ -29,6 +45,24 @@ export default function Home() {
     setShowMessage(true);
     setTimeout(() => setShowMessage(false), 5000);
   };
+
+  // Funções para abrir modais
+  const handleShowDetalhes = (processo: ProcessoData) => {
+    setModalDetalhes({ isOpen: true, processo });
+  };
+
+  const handleShowDocumentos = (processo: ProcessoData) => {
+    setModalDocumentos({ isOpen: true, processo });
+  };
+
+  const handleShowMovimentos = (processo: ProcessoData) => {
+    setModalMovimentos({ isOpen: true, processo });
+  };
+
+  // Funções para fechar modais
+  const closeModalDetalhes = () => setModalDetalhes({ isOpen: false, processo: null });
+  const closeModalDocumentos = () => setModalDocumentos({ isOpen: false, processo: null });
+  const closeModalMovimentos = () => setModalMovimentos({ isOpen: false, processo: null });
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -581,11 +615,12 @@ export default function Home() {
                         <div dangerouslySetInnerHTML={{ __html: processo.poloPassivo }} />
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <button className="text-gray-400 hover:text-gray-600">
-                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                          </svg>
-                        </button>
+                        <ActionMenu
+                          processo={processo}
+                          onShowDetalhes={handleShowDetalhes}
+                          onShowDocumentos={handleShowDocumentos}
+                          onShowMovimentos={handleShowMovimentos}
+                        />
                       </td>
                     </tr>
                   ))
@@ -614,6 +649,134 @@ export default function Home() {
           )}
         </div>
       </div>
+
+      {/* Modais */}
+
+      {/* Modal Detalhes */}
+      <Modal
+        isOpen={modalDetalhes.isOpen}
+        onClose={closeModalDetalhes}
+        title="Detalhes do Processo"
+      >
+        {modalDetalhes.processo && (
+          <div className="space-y-4">
+            <div>
+              <dt className="font-semibold text-gray-700 mb-1">Assunto</dt>
+              <dd className="ml-4 pl-4 border-l-2 border-gray-200 text-gray-900">
+                {modalDetalhes.processo.assunto || "Não informado"}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="font-semibold text-gray-700 mb-1">Sistema</dt>
+              <dd className="ml-4 pl-4 border-l-2 border-gray-200 text-gray-900">
+                {modalDetalhes.processo.sistema || "Não informado"}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="font-semibold text-gray-700 mb-1">Polo Ativo</dt>
+              <dd className="ml-4 pl-4 border-l-2 border-gray-200 text-gray-900">
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: modalDetalhes.processo.poloAtivo || "Não informado",
+                  }}
+                />
+              </dd>
+            </div>
+
+            <div>
+              <dt className="font-semibold text-gray-700 mb-1">Polo Passivo</dt>
+              <dd className="ml-4 pl-4 border-l-2 border-gray-200 text-gray-900">
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: modalDetalhes.processo.poloPassivo || "Não informado",
+                  }}
+                />
+              </dd>
+            </div>
+
+            <div>
+              <dt className="font-semibold text-gray-700 mb-1">Processo Ativo</dt>
+              <dd className="ml-4 pl-4 border-l-2 border-gray-200 text-gray-900">
+                {modalDetalhes.processo.ativo || "Não informado"}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="font-semibold text-gray-700 mb-1">Última Movimentação</dt>
+              <dd className="ml-4 pl-4 border-l-2 border-gray-200 text-gray-900">
+                {formatDate(modalDetalhes.processo.dataUltMov) || "Não informado"}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="font-semibold text-gray-700 mb-1">Data Distribuição</dt>
+              <dd className="ml-4 pl-4 border-l-2 border-gray-200 text-gray-900">
+                {formatDate(modalDetalhes.processo.dataDistribuicao) || "Não informado"}
+              </dd>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal Documentos */}
+      <Modal
+        isOpen={modalDocumentos.isOpen}
+        onClose={closeModalDocumentos}
+        title="Últimos 5 Documentos"
+      >
+        {modalDocumentos.processo && (
+          <ul className="space-y-2">
+            {modalDocumentos.processo.documentos &&
+            modalDocumentos.processo.documentos.length > 0 ? (
+              modalDocumentos.processo.documentos.map(
+                (doc: { tipo?: { nome: string }; dataHoraJuntada: string }, index: number) => (
+                  <li key={index} className="py-2 border-b border-gray-100 last:border-b-0">
+                    <div className="flex justify-between items-start">
+                      <span className="font-medium text-gray-900">
+                        {doc.tipo?.nome || "Tipo não especificado"}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        {formatDate(doc.dataHoraJuntada)}
+                      </span>
+                    </div>
+                  </li>
+                )
+              )
+            ) : (
+              <li className="text-gray-500">Nenhum documento encontrado.</li>
+            )}
+          </ul>
+        )}
+      </Modal>
+
+      {/* Modal Movimentos */}
+      <Modal
+        isOpen={modalMovimentos.isOpen}
+        onClose={closeModalMovimentos}
+        title="Últimos 5 Movimentos"
+      >
+        {modalMovimentos.processo && (
+          <ul className="space-y-2">
+            {modalMovimentos.processo.movimentos &&
+            modalMovimentos.processo.movimentos.length > 0 ? (
+              modalMovimentos.processo.movimentos.map(
+                (mov: { descricao: string; dataHora: string }, index: number) => (
+                  <li key={index} className="py-2 border-b border-gray-100 last:border-b-0">
+                    <div className="flex justify-between items-start">
+                      <span className="text-gray-900">{mov.descricao}</span>
+                      <span className="text-sm text-gray-500 ml-4">{formatDate(mov.dataHora)}</span>
+                    </div>
+                  </li>
+                )
+              )
+            ) : (
+              <li className="text-gray-500">Nenhum movimento encontrado.</li>
+            )}
+          </ul>
+        )}
+      </Modal>
 
       {/* Notification */}
       {showMessage && (
