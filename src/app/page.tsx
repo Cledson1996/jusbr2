@@ -158,32 +158,85 @@ export default function Home() {
     }
 
     try {
-      // Cria dados para exportação
-      const dadosExportacao = processos.map((p) => ({
-        "Número do Processo": p.numeroProcesso,
-        Tribunal: p.siglaTribunal,
-        Sistema: p.sistema,
-        "Órgão Julgador": p.orgaoJulgador,
-        "Data Distribuição": p.dataDistribuicao,
-        Instância: p.instancia,
-        "Data Último Movimento": p.dataUltMov,
-        Ativo: p.ativo,
-        "Valor Ação": p.valorAcao,
-        Classe: p.classe,
-        Assunto: p.assunto,
-        "Polo Ativo": p.poloAtivo.replace(/<br>/g, "; "),
-        "Polo Passivo": p.poloPassivo.replace(/<br>/g, "; "),
-        Status: p.status ? "Sucesso" : "Erro",
-        "Mensagem Erro": p.mensagemErro || "",
-      }));
+      // Cria dados para exportação com formatação completa
+      const dadosExportacao = processos.map((p) => {
+        // Formata movimentos
+        const movimentosFormatados: string[] = [];
+        if (p.movimentos && p.movimentos.length > 0) {
+          p.movimentos.forEach((mov: { dataHora: string; descricao: string }) => {
+            try {
+              const dataHora = new Date(mov.dataHora);
+              const dataFormatada =
+                dataHora.toLocaleDateString("pt-BR") +
+                " " +
+                dataHora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+              movimentosFormatados.push(dataFormatada + ": " + (mov.descricao || "N/A"));
+            } catch {
+              movimentosFormatados.push("Data inválida: " + (mov.descricao || "N/A"));
+            }
+          });
+        }
+        const movimentosString = movimentosFormatados.join("; ");
+
+        // Formata documentos
+        const documentosFormatados: string[] = [];
+        if (p.documentos && p.documentos.length > 0) {
+          p.documentos.forEach((doc: { dataHoraJuntada: string; tipo?: { nome: string } }) => {
+            try {
+              const dataHora = new Date(doc.dataHoraJuntada);
+              const dataFormatada =
+                dataHora.toLocaleDateString("pt-BR") +
+                " " +
+                dataHora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+              documentosFormatados.push(dataFormatada + ": " + (doc.tipo?.nome || "N/A"));
+            } catch {
+              documentosFormatados.push("Data inválida: " + (doc.tipo?.nome || "N/A"));
+            }
+          });
+        }
+        const documentosString = documentosFormatados.join("; ");
+
+        // Remove tags HTML dos polos
+        const poloAtivoLimpo = p.poloAtivo.replace(/<br>/g, "; ").replace(/<[^>]*>/g, "") || "-";
+        const poloPassivoLimpo =
+          p.poloPassivo.replace(/<br>/g, "; ").replace(/<[^>]*>/g, "") || "-";
+
+        // Formata datas para formato brasileiro
+        const dataUltMovFormatada = p.dataUltMov
+          ? new Date(p.dataUltMov).toLocaleDateString("pt-BR")
+          : "";
+        const dataDistribuicaoFormatada = p.dataDistribuicao
+          ? new Date(p.dataDistribuicao).toLocaleDateString("pt-BR")
+          : "";
+
+        return {
+          "Nº Processo": p.numeroProcesso,
+          Tribunal: p.siglaTribunal,
+          "Órgão julgador": p.orgaoJulgador,
+          Instância: p.instancia,
+          "Data Últ. mov.": dataUltMovFormatada,
+          "Data distribuição": dataDistribuicaoFormatada,
+          Ativo: p.ativo,
+          "Valor Ação": p.valorAcao,
+          Classe: p.classe,
+          Assunto: p.assunto,
+          Sistema: p.sistema,
+          "Polo Ativo": poloAtivoLimpo,
+          "Polo Passivo": poloPassivoLimpo,
+          Movimentos: movimentosString,
+          Documentos: documentosString,
+          Status: p.status ? "Sucesso" : "Erro",
+        };
+      });
 
       // Cria workbook
       const ws = XLSX.utils.json_to_sheet(dadosExportacao);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Processos");
+      XLSX.utils.book_append_sheet(wb, ws, "Resultados");
 
-      // Exporta arquivo
-      XLSX.writeFile(wb, `processos_jusbr_${new Date().toISOString().split("T")[0]}.xlsx`);
+      // Exporta arquivo com nome no formato do PHP
+      const dataAtual = new Date().toISOString().split("T")[0];
+      XLSX.writeFile(wb, `consulta_jusbr_${dataAtual}.xlsx`);
 
       showNotification("Arquivo exportado com sucesso!");
     } catch (error) {
