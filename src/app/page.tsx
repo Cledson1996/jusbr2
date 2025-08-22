@@ -34,6 +34,12 @@ export default function Home() {
   const [progressoPlanilha, setProgressoPlanilha] = useState({ atual: 0, total: 0 });
   const [processosEmProcessamento, setProcessosEmProcessamento] = useState<ProcessoData[]>([]);
 
+  // Estados para ordenação da tabela
+  const [ordenacao, setOrdenacao] = useState<{
+    campo: keyof ProcessoData | null;
+    direcao: "asc" | "desc";
+  }>({ campo: null, direcao: "asc" });
+
   const processoService = ProcessoService.getInstance();
 
   useEffect(() => {
@@ -54,6 +60,103 @@ export default function Home() {
     }
 
     setTimeout(() => setShowMessage(false), 5000);
+  };
+
+  // Função para ordenar processos
+  const ordenarProcessos = (campo: keyof ProcessoData) => {
+    setOrdenacao((prev) => {
+      const novaDirecao = prev.campo === campo && prev.direcao === "asc" ? "desc" : "asc";
+      return { campo, direcao: novaDirecao };
+    });
+  };
+
+  // Função para obter processos ordenados
+  const getProcessosOrdenados = () => {
+    const processosParaOrdenar = processandoPlanilha ? processosEmProcessamento : processos;
+
+    if (!ordenacao.campo) return processosParaOrdenar;
+
+    return [...processosParaOrdenar].sort((a, b) => {
+      const campo = ordenacao.campo as keyof ProcessoData;
+      const valorA = a[campo];
+      const valorB = b[campo];
+
+      // Trata valores nulos/undefined
+      if (valorA === null || valorA === undefined) return 1;
+      if (valorB === null || valorB === undefined) return -1;
+
+      // Trata strings
+      if (typeof valorA === "string" && typeof valorB === "string") {
+        const comparacao = valorA.localeCompare(valorB, "pt-BR");
+        return ordenacao.direcao === "asc" ? comparacao : -comparacao;
+      }
+
+      // Trata números
+      if (typeof valorA === "number" && typeof valorB === "number") {
+        return ordenacao.direcao === "asc" ? valorA - valorB : valorB - valorA;
+      }
+
+      // Trata booleanos
+      if (typeof valorA === "boolean" && typeof valorB === "boolean") {
+        const comparacao = valorA === valorB ? 0 : valorA ? 1 : -1;
+        return ordenacao.direcao === "asc" ? comparacao : -comparacao;
+      }
+
+      // Trata arrays (documentos e movimentos)
+      if (Array.isArray(valorA) && Array.isArray(valorB)) {
+        const comparacao = valorA.length - valorB.length;
+        return ordenacao.direcao === "asc" ? comparacao : -comparacao;
+      }
+
+      return 0;
+    });
+  };
+
+  // Componente para cabeçalho da tabela com ordenação
+  const TableHeader = ({
+    campo,
+    children,
+  }: {
+    campo: keyof ProcessoData;
+    children: React.ReactNode;
+  }) => {
+    const isOrdenado = ordenacao.campo === campo;
+    const isAsc = ordenacao.direcao === "asc";
+
+    return (
+      <th
+        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+        onClick={() => ordenarProcessos(campo)}
+      >
+        <div className="flex items-center justify-between">
+          {children}
+          <div className="flex flex-col">
+            <svg
+              className={`w-3 h-3 ${isOrdenado && isAsc ? "text-blue-600" : "text-gray-400"}`}
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fillRule="evenodd"
+                d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <svg
+              className={`w-3 h-3 ${isOrdenado && !isAsc ? "text-blue-600" : "text-gray-400"}`}
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fillRule="evenodd"
+                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </div>
+        </div>
+      </th>
+    );
   };
 
   // Funções para abrir modais
@@ -527,6 +630,14 @@ export default function Home() {
                 >
                   Limpar Fila
                 </button>
+                {ordenacao.campo && (
+                  <button
+                    onClick={() => setOrdenacao({ campo: null, direcao: "asc" })}
+                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 text-sm"
+                  >
+                    Limpar Ordenação
+                  </button>
+                )}
               </div>
 
               <button
@@ -551,6 +662,33 @@ export default function Home() {
                 <span className="font-medium">Processos na fila:</span>{" "}
                 {processoService.getQueue().length}
               </div>
+              {ordenacao.campo && (
+                <div className="text-blue-800">
+                  <span className="font-medium">Ordenado por:</span>{" "}
+                  {ordenacao.campo === "numeroProcesso" && "N° Processo"}
+                  {ordenacao.campo === "siglaTribunal" && "Tribunal"}
+                  {ordenacao.campo === "sistema" && "Sistema"}
+                  {ordenacao.campo === "orgaoJulgador" && "Órgão Julgador"}
+                  {ordenacao.campo === "dataDistribuicao" && "Data Distribuição"}
+                  {ordenacao.campo === "instancia" && "Instância"}
+                  {ordenacao.campo === "dataUltMov" && "Data Último Movimento"}
+                  {ordenacao.campo === "ativo" && "Ativo"}
+                  {ordenacao.campo === "valorAcao" && "Valor Ação"}
+                  {ordenacao.campo === "classe" && "Classe"}
+                  {ordenacao.campo === "assunto" && "Assunto"}
+                  {ordenacao.campo === "poloAtivo" && "Polo Ativo"}
+                  {ordenacao.campo === "poloPassivo" && "Polo Passivo"}{" "}
+                  <span
+                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      ordenacao.direcao === "asc"
+                        ? "bg-green-100 text-green-800"
+                        : "bg-blue-100 text-blue-800"
+                    }`}
+                  >
+                    {ordenacao.direcao === "asc" ? "↑ Crescente" : "↓ Decrescente"}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -561,280 +699,29 @@ export default function Home() {
             <table className="min-w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-between">
-                      N° Processo
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                        />
-                      </svg>
-                    </div>
+                  <TableHeader campo="numeroProcesso">N° Processo</TableHeader>
+                  <TableHeader campo="siglaTribunal">Tribunal</TableHeader>
+                  <TableHeader campo="sistema">Sistema</TableHeader>
+                  <TableHeader campo="orgaoJulgador">Órgão Julgador</TableHeader>
+                  <TableHeader campo="dataDistribuicao">Data Distribuição</TableHeader>
+                  <TableHeader campo="instancia">Instância</TableHeader>
+                  <TableHeader campo="dataUltMov">Data Último Movimento</TableHeader>
+                  <TableHeader campo="ativo">Ativo</TableHeader>
+                  <TableHeader campo="valorAcao">Valor Ação</TableHeader>
+                  <TableHeader campo="classe">Classe</TableHeader>
+                  <TableHeader campo="assunto">Assunto</TableHeader>
+                  <TableHeader campo="poloAtivo">Polo Ativo</TableHeader>
+                  <TableHeader campo="poloPassivo">Polo Passivo</TableHeader>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-between">
-                      Tribunal
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-between">
-                      Sistema
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-between">
-                      Órgão Julgador
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-between">
-                      Data Distribuição
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-between">
-                      Instância
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-between">
-                      Data Último Movimento
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-between">
-                      Ativo
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-between">
-                      Valor Ação
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-between">
-                      Classe
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-between">
-                      Assunto
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-between">
-                      Polo Ativo
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-between">
-                      Polo Passivo
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-between">
-                      Status
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-between">
-                      Ações
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                        />
-                      </svg>
-                    </div>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Ações
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {(processandoPlanilha ? processosEmProcessamento : processos).length === 0 ? (
+                {getProcessosOrdenados().length === 0 ? (
                   <tr>
                     <td colSpan={15} className="px-4 py-8 text-center text-gray-500">
                       {processandoPlanilha
@@ -843,7 +730,7 @@ export default function Home() {
                     </td>
                   </tr>
                 ) : (
-                  (processandoPlanilha ? processosEmProcessamento : processos).map((processo) => (
+                  getProcessosOrdenados().map((processo) => (
                     <tr key={processo.id} className="hover:bg-gray-50">
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                         {processo.numeroProcesso}

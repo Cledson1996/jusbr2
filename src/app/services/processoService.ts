@@ -1,3 +1,5 @@
+
+
 export interface ProcessoData {
   id: string;
   numeroProcesso: string;
@@ -190,92 +192,58 @@ class ProcessoService {
     return null;
   }
 
-  private async consultaApiCnj(numeroProcesso: string, apiUrl: string): Promise<string> {
-    try {
-      const apiKey = "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
-      const numeroApenasDigitos = numeroProcesso.replace(/\D/g, "");
-
-      const payload = {
-        query: {
-          match: { numeroProcesso: numeroApenasDigitos },
-        },
-      };
-
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          Authorization: apiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (response.status === 200) {
-        const data = await response.json();
-
-        if (data.hits?.hits?.length > 0) {
-          for (const hit of data.hits.hits) {
-            const nomeSistema = hit._source?.sistema?.nome;
-            if (nomeSistema && nomeSistema !== "Inválido") {
-              return nomeSistema;
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Erro na API CNJ:", error);
-    }
-
+  private async consultaApiCnj(_numeroProcesso: string, _apiUrl: string): Promise<string> {
+    // Esta função agora será chamada através da API route server-side
     return "N/A";
   }
 
   private async consultaApiJusBR(numero: string): Promise<ApiJusBRResponse> {
+    // Esta função agora será chamada através da API route server-side
+    return {
+      status: "ERRO",
+      mensagem: "Função não implementada",
+      data: {
+        numeroProcesso: numero,
+        erro: true,
+        mensagemErro: "Função não implementada",
+      },
+    };
+  }
+
+  private async consultarProcessoViaAPI(numeroProcesso: string): Promise<{
+    sistema: string;
+    resultado: ApiJusBRResponse;
+  }> {
     try {
-      const url = `https://rpa.juscash.com.br/jusbr/api/processo/${encodeURIComponent(numero)}`;
-
-      // Implementa timeout usando AbortController
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minutos
-
-      const response = await fetch(url, {
-        signal: controller.signal,
+      const response = await fetch("/api/processo", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ numeroProcesso }),
       });
 
-      clearTimeout(timeoutId);
-
-      if (response.status === 200) {
-        return await response.json();
-      } else {
+      if (response.ok) {
+        const data = await response.json();
         return {
-          status: "ERRO",
-          mensagem: `HTTP ${response.status}`,
-          data: {
-            numeroProcesso: numero,
-            erro: true,
-            mensagemErro: `Erro HTTP: ${response.status}`,
-          },
+          sistema: data.sistema,
+          resultado: data.resultado,
         };
+      } else {
+        throw new Error(`HTTP ${response.status}`);
       }
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        return {
-          status: "ERRO",
-          mensagem: "Timeout",
-          data: {
-            numeroProcesso: numero,
-            erro: true,
-            mensagemErro: "Timeout na consulta da API",
-          },
-        };
-      }
-
+      console.error("Erro na consulta via API:", error);
       return {
-        status: "ERRO",
-        mensagem: `Falha na API`,
-        data: {
-          numeroProcesso: numero,
-          erro: true,
-          mensagemErro: "Falha na API",
+        sistema: "N/A",
+        resultado: {
+          status: "ERRO",
+          mensagem: "Falha na API",
+          data: {
+            numeroProcesso,
+            erro: true,
+            mensagemErro: "Falha na consulta via API",
+          },
         },
       };
     }
@@ -286,25 +254,20 @@ class ProcessoService {
       const numero = this.queue.shift();
       if (!numero) continue;
 
-      let nomeSistema = "N/A";
-      const cnjApiUrl = this.getCnjApiUrl(numero);
-
-      if (cnjApiUrl) {
-        nomeSistema = await this.consultaApiCnj(numero, cnjApiUrl);
-      }
-
-      const apiResult: ApiJusBRResponse = await this.consultaApiJusBR(numero);
+      // Usa a API route server-side para evitar CORS
+      const { sistema, resultado } = await this.consultarProcessoViaAPI(numero);
+      const apiResult = resultado;
       const tramitacao = apiResult.data?.tramitacaoAtual || {};
       const partes = tramitacao.partes || [];
 
       const poloAtivoArray = partes.filter((p: { polo: string }) => p.polo === "ATIVO");
       const poloPassivoArray = partes.filter((p: { polo: string }) => p.polo === "PASSIVO");
 
-      const resultado: ProcessoData = {
+      const resultadoProcesso: ProcessoData = {
         id: this.generateId(),
         numeroProcesso: apiResult.data?.numeroProcesso || numero,
         siglaTribunal: apiResult.data?.siglaTribunal || "-",
-        sistema: nomeSistema,
+        sistema: sistema,
         orgaoJulgador: tramitacao.distribuicao?.[0]?.orgaoJulgador?.[0]?.nome || "-",
         dataDistribuicao: tramitacao.distribuicao?.[0]?.dataHora || null,
         instancia: tramitacao.instancia || "-",
@@ -324,7 +287,7 @@ class ProcessoService {
         mensagemErro: apiResult.data?.mensagemErro || null,
       };
 
-      this.results.push(resultado);
+      this.results.push(resultadoProcesso);
     }
 
     this.saveToStorage();
