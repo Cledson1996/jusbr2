@@ -1,5 +1,3 @@
-
-
 export interface ProcessoData {
   id: string;
   numeroProcesso: string;
@@ -192,10 +190,10 @@ class ProcessoService {
     return null;
   }
 
-  private async consultaApiCnj(_numeroProcesso: string, _apiUrl: string): Promise<string> {
-    // Esta função agora será chamada através da API route server-side
-    return "N/A";
-  }
+  // Função mantida para compatibilidade, mas não é mais usada
+  // private async consultaApiCnj(_numeroProcesso: string, _apiUrl: string): Promise<string> {
+  //   return "N/A";
+  // }
 
   private async consultaApiJusBR(numero: string): Promise<ApiJusBRResponse> {
     // Esta função agora será chamada através da API route server-side

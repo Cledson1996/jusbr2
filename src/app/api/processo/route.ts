@@ -235,7 +235,7 @@ async function consultaApiJusBR(numero: string): Promise<ApiJusBRResponse> {
     }
 
     if (error && typeof error === "object" && "response" in error) {
-      const axiosError = error as any;
+      const axiosError = error as { response?: { status?: number }; message?: string };
       return {
         status: "ERRO",
         mensagem: `Erro HTTP: ${axiosError.response?.status || "Desconhecido"}`,
