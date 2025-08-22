@@ -13,11 +13,48 @@ export interface ProcessoData {
   assunto: string;
   poloAtivo: string;
   poloPassivo: string;
-  documentos: any[];
-  movimentos: any[];
+  documentos: DocumentoData[];
+  movimentos: MovimentoData[];
   status: boolean;
   erro: boolean;
   mensagemErro: string | null;
+}
+
+export interface DocumentoData {
+  tipo?: {
+    nome: string;
+  };
+  dataHoraJuntada: string;
+}
+
+export interface MovimentoData {
+  descricao: string;
+  dataHora: string;
+}
+
+export interface ApiJusBRResponse {
+  status: string;
+  mensagem: string;
+  data: {
+    numeroProcesso?: string;
+    siglaTribunal?: string;
+    tramitacaoAtual?: {
+      instancia?: string;
+      ativo?: boolean;
+      valorAcao?: number;
+      classe?: Array<{ descricao: string }>;
+      assunto?: Array<{ descricao: string }>;
+      partes?: Array<{ polo: string; nome: string }>;
+      documentos?: DocumentoData[];
+      movimentos?: MovimentoData[];
+      distribuicao?: Array<{
+        dataHora?: string;
+        orgaoJulgador?: Array<{ nome: string }>;
+      }>;
+    };
+    erro?: boolean;
+    mensagemErro?: string;
+  };
 }
 
 export interface ConsultaResponse {
@@ -192,32 +229,59 @@ class ProcessoService {
     return "N/A";
   }
 
-  private async consultaApiJusBR(numero: string): Promise<any> {
+  private async consultaApiJusBR(numero: string): Promise<ApiJusBRResponse> {
     try {
       const url = `https://rpa.juscash.com.br/jusbr/api/processo/${encodeURIComponent(numero)}`;
-      const response = await fetch(url, { timeout: 600000 });
+
+      // Implementa timeout usando AbortController
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minutos
+
+      const response = await fetch(url, {
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
 
       if (response.status === 200) {
         return await response.json();
+      } else {
+        return {
+          status: "ERRO",
+          mensagem: `HTTP ${response.status}`,
+          data: {
+            numeroProcesso: numero,
+            erro: true,
+            mensagemErro: `Erro HTTP: ${response.status}`,
+          },
+        };
       }
     } catch (error) {
-      console.error("Erro na API JusBR:", error);
-    }
+      if (error instanceof Error && error.name === "AbortError") {
+        return {
+          status: "ERRO",
+          mensagem: "Timeout",
+          data: {
+            numeroProcesso: numero,
+            erro: true,
+            mensagemErro: "Timeout na consulta da API",
+          },
+        };
+      }
 
-    return {
-      status: "SUCESSO",
-      mensagem: `Falha na API`,
-      data: {
-        numeroProcesso: numero,
-        erro: true,
-        mensagemErro: "Falha na API",
-      },
-    };
+      return {
+        status: "ERRO",
+        mensagem: `Falha na API`,
+        data: {
+          numeroProcesso: numero,
+          erro: true,
+          mensagemErro: "Falha na API",
+        },
+      };
+    }
   }
 
   public async processarLote(): Promise<ConsultaResponse> {
-    const processadosNesteLote = 0;
-
     for (let i = 0; i < this.batchSize && this.queue.length > 0; i++) {
       const numero = this.queue.shift();
       if (!numero) continue;
@@ -229,12 +293,12 @@ class ProcessoService {
         nomeSistema = await this.consultaApiCnj(numero, cnjApiUrl);
       }
 
-      const apiResult = await this.consultaApiJusBR(numero);
+      const apiResult: ApiJusBRResponse = await this.consultaApiJusBR(numero);
       const tramitacao = apiResult.data?.tramitacaoAtual || {};
       const partes = tramitacao.partes || [];
 
-      const poloAtivoArray = partes.filter((p: any) => p.polo === "ATIVO");
-      const poloPassivoArray = partes.filter((p: any) => p.polo === "PASSIVO");
+      const poloAtivoArray = partes.filter((p: { polo: string }) => p.polo === "ATIVO");
+      const poloPassivoArray = partes.filter((p: { polo: string }) => p.polo === "PASSIVO");
 
       const resultado: ProcessoData = {
         id: this.generateId(),
@@ -247,10 +311,12 @@ class ProcessoService {
         dataUltMov: tramitacao.movimentos?.[0]?.dataHora || null,
         ativo: tramitacao.ativo !== undefined ? (tramitacao.ativo ? "Sim" : "Não") : "-",
         valorAcao: tramitacao.valorAcao || 0,
-        classe: (tramitacao.classe || []).map((c: any) => c.descricao).join(", "),
-        assunto: (tramitacao.assunto || []).map((a: any) => a.descricao).join(", "),
-        poloAtivo: poloAtivoArray.map((p: any) => p.nome).join("<br>"),
-        poloPassivo: poloPassivoArray.map((p: any) => p.nome).join("<br>"),
+        classe: (tramitacao.classe || []).map((c: { descricao: string }) => c.descricao).join(", "),
+        assunto: (tramitacao.assunto || [])
+          .map((a: { descricao: string }) => a.descricao)
+          .join(", "),
+        poloAtivo: poloAtivoArray.map((p: { nome: string }) => p.nome).join("<br>"),
+        poloPassivo: poloPassivoArray.map((p: { nome: string }) => p.nome).join("<br>"),
         documentos: (tramitacao.documentos || []).slice(0, 5),
         movimentos: (tramitacao.movimentos || []).slice(0, 5),
         status: true,

@@ -25,7 +25,7 @@ export class ExcelUtils {
           // Extrai números de processos da primeira coluna
           const processos: string[] = [];
 
-          jsonData.forEach((row: unknown[], index: number) => {
+          jsonData.forEach((row: unknown[]) => {
             // Pega o primeiro valor de cada linha (primeira coluna)
             const numeroProcesso = row[0];
 
@@ -42,7 +42,7 @@ export class ExcelUtils {
           const processosUnicos = [...new Set(processos)];
 
           resolve(processosUnicos);
-        } catch (error) {
+        } catch {
           reject(new Error("Erro ao processar arquivo Excel"));
         }
       };
